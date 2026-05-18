@@ -1,0 +1,66 @@
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.matplotlib/
+.coverage
+htmlcov/
+venv/
+.venv/
+env/
+
+# Packaging and native build outputs
+build/
+dist/
+*.egg-info/
+*.so
+*.pyd
+*.dll
+*.dylib
+*.o
+*.a
+
+# CMake outputs
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+compile_commands.json
+Makefile
+
+# Notebook and editor noise
+.ipynb_checkpoints/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Generated figures and reports
+figures/
+plots/
+reports/
+
+# Local/raw market data can be large. Keep directory placeholders.
+data/binance_raw/*
+!data/binance_raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# LaTeX build products
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.pdf
+*.run.xml
+*.synctex.gz
+
+# OS files
+.DS_Store
+Thumbs.db

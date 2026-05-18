@@ -1,0 +1,44 @@
+% lower_bound.tex - Lower bound on regret
+\documentclass[11pt]{article}
+\usepackage{amsmath, amssymb, amsthm}
+
+\title{A Lower Bound for Adversarial Spread Selection}
+\author{}
+\date{}
+
+\newtheorem{theorem}{Theorem}
+
+\begin{document}
+\maketitle
+
+\section{Statement}
+\begin{theorem}
+For $K\ge 2$ arms and horizon $T$, every bandit algorithm has an adversarial
+reward sequence with expected regret
+\[
+\mathbb{E}[R_T] = \Omega(\sqrt{TK}).
+\]
+\end{theorem}
+
+\section{Proof Sketch}
+It is enough to consider stochastic reward sequences chosen before play. Pick
+one arm $a$ uniformly from $[K]$. Arm $a$ has Bernoulli mean $1/2+\epsilon$ and
+all other arms have mean $1/2$. If the learner pulls arm $a$ exactly $N_a$
+times, then its regret is
+\[
+\epsilon\,\mathbb{E}[T-N_a].
+\]
+Identifying $a$ requires distinguishing $K$ nearby Bernoulli distributions.
+Standard change-of-measure arguments imply that, for
+$\epsilon = c\sqrt{K/T}$ with a small universal constant $c$, the learner cannot
+place more than a constant fraction of its pulls on the hidden best arm in
+expectation. Hence
+\[
+\mathbb{E}[T-N_a] = \Omega(T),
+\qquad
+\mathbb{E}[R_T] = \Omega(T\epsilon)=\Omega(\sqrt{TK}).
+\]
+Yao's minimax principle transfers the distributional construction to an
+adversarial lower bound.
+
+\end{document}

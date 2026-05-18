@@ -1,0 +1,85 @@
+% regret_bound.tex - Regret bound derivation
+\documentclass[11pt]{article}
+\usepackage{amsmath, amssymb, amsthm}
+
+\title{Regret Bound for Exp3 Spread Selection}
+\author{}
+\date{}
+
+\newtheorem{theorem}{Theorem}
+
+\begin{document}
+\maketitle
+
+\section{Setup}
+There are $K$ spreads. At round $t$, the learner samples arm $I_t$ from
+$p_t \in \Delta_K$ and observes reward $r_{t,I_t}\in[0,1]$. External regret is
+\[
+R_T = \max_{k\in[K]}\sum_{t=1}^T r_{t,k}
+      - \sum_{t=1}^T r_{t,I_t}.
+\]
+Exp3 uses
+\[
+p_{t,k} = (1-\gamma)\frac{w_{t,k}}{\sum_j w_{t,j}}+\frac{\gamma}{K},
+\qquad
+\widehat r_{t,k} =
+\begin{cases}
+r_{t,I_t}/p_{t,I_t}, & k=I_t,\\
+0, & k\ne I_t,
+\end{cases}
+\]
+and updates
+\[
+w_{t+1,k}=w_{t,k}\exp\left(\frac{\gamma}{K}\widehat r_{t,k}\right).
+\]
+
+\section{Bound}
+\begin{theorem}
+For rewards in $[0,1]$, Exp3 with
+$\gamma=\sqrt{\log K/(TK)}$ satisfies
+\[
+\mathbb{E}[R_T] \le 2\sqrt{TK\log K}.
+\]
+\end{theorem}
+
+\begin{proof}
+Let $W_t=\sum_k w_{t,k}$ and $w_{1,k}=1$. Since
+$e^x\le 1+x+(e-2)x^2$ for $x\le 1$,
+\[
+\frac{W_{t+1}}{W_t}
+\le
+1+\frac{\gamma}{K}\sum_k q_{t,k}\widehat r_{t,k}
+  +(e-2)\frac{\gamma^2}{K^2}\sum_k q_{t,k}\widehat r_{t,k}^2,
+\]
+where $q_{t,k}=w_{t,k}/W_t$. Taking logs and using $\log(1+x)\le x$ gives
+\[
+\log\frac{W_{T+1}}{W_1}
+\le
+\frac{\gamma}{K}\sum_{t,k}q_{t,k}\widehat r_{t,k}
++(e-2)\frac{\gamma^2}{K^2}\sum_{t,k}q_{t,k}\widehat r_{t,k}^2.
+\]
+For any fixed arm $a$,
+\[
+\log\frac{W_{T+1}}{W_1}
+\ge
+\log\frac{w_{T+1,a}}{K}
+=
+\frac{\gamma}{K}\sum_t \widehat r_{t,a}-\log K.
+\]
+Combining the two displays and taking expectations yields
+\[
+\sum_t r_{t,a}
+- \mathbb{E}\sum_t\sum_k q_{t,k}r_{t,k}
+\le
+\frac{K\log K}{\gamma}+(e-2)\gamma T.
+\]
+Because $p_t=(1-\gamma)q_t+\gamma/K$, replacing $q_t$ by $p_t$ costs at most
+$\gamma T$. Thus
+\[
+\mathbb{E}[R_T]\le \frac{K\log K}{\gamma}+(e-1)\gamma T.
+\]
+Substituting $\gamma=\sqrt{\log K/(TK)}$ and absorbing the numerical constant
+gives the stated bound.
+\end{proof}
+
+\end{document}

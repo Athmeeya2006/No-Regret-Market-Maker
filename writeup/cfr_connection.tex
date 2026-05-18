@@ -1,0 +1,44 @@
+% cfr_connection.tex - Connection to CFR
+\documentclass[11pt]{article}
+\usepackage{amsmath, amssymb, amsthm}
+
+\title{No-Regret Learning in CFR and Market Making}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{CFR}
+Counterfactual Regret Minimization maintains a regret minimizer at each
+information set of an extensive-form game. If each local regret is sublinear,
+then total regret is also sublinear:
+\[
+R_T \le \sum_{I} R_T^I.
+\]
+The average strategy therefore approaches a Nash equilibrium in two-player
+zero-sum games.
+
+\section{Spread Selection}
+In the market-making experiment, the repeated decision is the spread choice.
+The Exp3 learner receives a reward equal to spread revenue plus inventory PnL
+minus risk penalties. Its regret is measured against the best fixed spread in
+hindsight:
+\[
+R_T = \max_s \sum_{t=1}^T r_t(s)-\sum_{t=1}^T r_t(s_t).
+\]
+
+\section{Decomposition}
+The simulator also records economic components
+\[
+\text{PnL}_t
+=
+\text{spread}_t
+- \text{adverse\_selection}_t
+- \text{inventory\_loss}_t.
+\]
+This is not a separate learning guarantee; it is an accounting identity used to
+inspect where rewards come from. The shared structure with CFR is the use of
+local regret minimization to control a global performance criterion.
+
+\end{document}
