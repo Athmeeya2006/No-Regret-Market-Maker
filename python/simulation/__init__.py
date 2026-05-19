@@ -1,1 +1,1 @@
-# Simulation: market simulator, regime generator, data pipeline
+# Simulation: market simulator, regime generator, and synthetic microstructure helpers

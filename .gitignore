@@ -42,12 +42,6 @@ figures/
 plots/
 reports/
 
-# Local/raw market data can be large. Keep directory placeholders.
-data/binance_raw/*
-!data/binance_raw/.gitkeep
-data/processed/*
-!data/processed/.gitkeep
-
 # LaTeX build products
 *.aux
 *.bbl

@@ -4,8 +4,7 @@ matplotlib==3.10.9
 pandas==3.0.3
 pybind11==3.0.4
 PyYAML==6.0.3
-requests==2.34.2
-pyarrow==24.0.0
 pytest==9.0.3
 pytest-cov==7.1.0
 cmake==4.3.2
+setuptools==70.0.0

@@ -41,4 +41,12 @@ This is not a separate learning guarantee; it is an accounting identity used to
 inspect where rewards come from. The shared structure with CFR is the use of
 local regret minimization to control a global performance criterion.
 
+\section{Controlled Simulation}
+To validate regret bounds and adaptation metrics, the experiments rely on a
+synthetic microstructure process with GARCH(1,1) volatility clustering and
+mean-reverting microstructure noise. This keeps the environment realistic yet
+measurable, so regime shifts and counterfactual rewards are known exactly.
+Real data introduces unobserved confounders and unclear ground truth, which
+makes verifying $O(\sqrt{T\log K})$ behavior less transparent.
+
 \end{document}
