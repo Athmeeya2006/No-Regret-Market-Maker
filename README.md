@@ -93,7 +93,7 @@ The context includes mid-price, spread, OFI, inventory, realized volatility, dep
 
 Regret curves depend on the accuracy of the counterfactual reward matrix. This simulator uses an **exponential approximation** rather than exact replay:
 
-$$\text{fill\_rate}(s) \propto \exp(-\kappa s)$$
+$$\mathrm{fill}(s) \propto \exp(-\kappa s)$$
 
 where $\kappa = 1.5$ models order arrival sensitivity to spread width. This approximation is:
 - **Directionally correct**: tighter spreads receive more fills
