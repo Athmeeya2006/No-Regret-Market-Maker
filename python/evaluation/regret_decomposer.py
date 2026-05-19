@@ -53,8 +53,11 @@ class RegretDecomposer:
             as_loss = 0.0
         self.adverse_selection_losses.append(as_loss)
 
-        # Inventory loss: mark-to-market movement of current inventory
-        # Positive inventory (long) loses when mid falls
+        # Inventory loss: mark-to-market loss on THIS ROUND's fill only.
+        # Formula: -(inventory_change * mid_move_after)
+        # This captures immediate loss (e.g., bought 5, mid fell 0.01 => loss 0.05)
+        # but NOT losses on accumulated position from prior rounds.
+        # To compute true position loss, caller must track cumulative inventory.
         inv_loss = max(0.0, -(inventory_change * mid_move_after))
         self.inventory_losses.append(inv_loss)
 

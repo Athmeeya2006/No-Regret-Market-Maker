@@ -41,15 +41,15 @@ def synthetic_rewards(K: int, T: int, best_arm: int = 0,
 def run_exp3_on_matrix(
     mm: Exp3MarketMaker,
     cf_mat: np.ndarray,
+    rng: np.random.Generator,
 ) -> np.ndarray:
     """Run an Exp3 instance on a fixed counterfactual matrix."""
     T = cf_mat.shape[0]
     for t in range(T):
         p      = mm.get_distribution()
-        idx    = int(np.random.choice(K, p=p))
+        idx    = int(rng.choice(K, p=p))
         reward = cf_mat[t, idx]
-        mm.last_idx = idx
-        mm.last_p   = float(p[idx])
+        mm.record_choice(idx, p)
         mm.update(reward)
     return mm.empirical_regret(cf_mat)
 
@@ -76,8 +76,7 @@ class TestExp3:
         mm    = Exp3MarketMaker(SPREADS, gamma=0.2)
         p_before = mm.get_distribution().copy()
         # Manually choose arm 0 with high reward
-        mm.last_idx = 0
-        mm.last_p   = float(p_before[0])
+        mm.record_choice(0, p_before)
         mm.update(1.0)
         p_after = mm.get_distribution()
         assert p_after[0] > p_before[0] - 1e-9
@@ -88,11 +87,11 @@ class TestExp3:
         Regret should stay below 2 * sqrt(T * K * ln(K)) with high probability.
         We allow 20% slack to account for finite-sample variation.
         """
-        np.random.seed(42)
+        rng  = np.random.default_rng(42)
         T    = 2000
         mm   = Exp3MarketMaker(SPREADS, T=T)
         cf   = synthetic_rewards(K, T, best_arm=2, gap=0.15, seed=1)
-        regret_curve = run_exp3_on_matrix(mm, cf)
+        regret_curve = run_exp3_on_matrix(mm, cf, rng)
 
         bound = mm.theoretical_regret_bound(T)
         # Regret must be below bound (with 20% slack for stochasticity)
@@ -101,11 +100,11 @@ class TestExp3:
         )
 
     def test_regret_curve_nonnegative(self):
-        np.random.seed(5)
+        rng = np.random.default_rng(5)
         T = 500
         mm = Exp3MarketMaker(SPREADS, T=T)
         cf = synthetic_rewards(K, T, best_arm=0, gap=0.12, seed=9)
-        rc = run_exp3_on_matrix(mm, cf)
+        rc = run_exp3_on_matrix(mm, cf, rng)
         assert (rc >= -1e-9).all()
 
     def test_regret_sublinear(self):
@@ -113,11 +112,11 @@ class TestExp3:
         Verify regret grows sublinearly: R_T / T -> 0.
         Check that per-round regret at T=3000 is lower than at T=1000.
         """
-        np.random.seed(7)
+        rng  = np.random.default_rng(7)
         T    = 3000
         mm   = Exp3MarketMaker(SPREADS, T=T)
         cf   = synthetic_rewards(K, T, best_arm=1, gap=0.2, seed=2)
-        rc   = run_exp3_on_matrix(mm, cf)
+        rc   = run_exp3_on_matrix(mm, cf, rng)
 
         # Per-round regret R_t/t should decrease over time
         per_round_early = rc[999] / 1000     # R_{1000} / 1000
@@ -129,8 +128,8 @@ class TestExp3:
 
     def test_reset_clears_state(self):
         mm = Exp3MarketMaker(SPREADS, T=100)
-        mm.last_idx = 0
-        mm.last_p   = 0.2
+        p = mm.get_distribution()
+        mm.record_choice(0, p)
         mm.update(0.5)
         mm.reset()
         assert mm.t == 0
@@ -147,8 +146,8 @@ class TestExp3:
         """After many updates to one arm, distribution should still be valid."""
         mm = Exp3MarketMaker(SPREADS, gamma=0.5)
         for _ in range(500):
-            mm.last_idx = 0
-            mm.last_p   = mm.get_distribution()[0]
+            p = mm.get_distribution()
+            mm.record_choice(0, p)
             mm.update(1.0)
         p = mm.get_distribution()
         assert np.isfinite(p).all()
@@ -174,7 +173,7 @@ class TestExp3DoublingTrick:
         """
         DT regret bound is 4 * sqrt(T K ln K) = 2x the standard 2*sqrt bound.
         """
-        np.random.seed(11)
+        rng    = np.random.default_rng(11)
         T    = 2000
         mm_dt = Exp3DoublingTrick(SPREADS)
         mm_std = Exp3MarketMaker(SPREADS, T=T)
@@ -187,9 +186,8 @@ class TestExp3DoublingTrick:
                       else None
                 if p is None:
                     continue
-                idx = int(np.random.choice(K, p=p))
-                mm.last_idx = idx
-                mm.last_p   = float(p[idx])
+                idx = int(rng.choice(K, p=p))
+                mm.record_choice(idx, p)
                 mm.update(cf[t, idx])
 
         bound_dt  = mm_dt.theoretical_regret_bound(T)
@@ -215,7 +213,7 @@ class TestSWExp3:
         After a regime change, SW-Exp3 should shift weights toward the new
         best arm faster than standard Exp3.
         """
-        np.random.seed(42)
+        rng = np.random.default_rng(42)
         T1, T2 = 500, 500
         T      = T1 + T2
         W      = 100
@@ -236,9 +234,8 @@ class TestSWExp3:
         for t in range(T):
             for mm, choices in [(mm_sw, sw_choices), (mm_std, std_choices)]:
                 p   = mm.get_distribution()
-                idx = int(np.random.choice(K, p=p))
-                mm.last_idx = idx
-                mm.last_p   = float(p[idx])
+                idx = int(rng.choice(K, p=p))
+                mm.record_choice(idx, p)
                 mm.update(cf[t, idx])
                 choices.append(idx)
 
@@ -252,7 +249,7 @@ class TestSWExp3:
         )
 
     def test_sw_exp3_lower_post_change_regret(self):
-        np.random.seed(123)
+        rng = np.random.default_rng(123)
         T1, T2 = 400, 400
         T = T1 + T2
         cf = np.zeros((T, K))
@@ -264,9 +261,8 @@ class TestSWExp3:
         for t in range(T):
             for mm in (sw, std):
                 p = mm.get_distribution()
-                idx = int(np.random.choice(K, p=p))
-                mm.last_idx = idx
-                mm.last_p = float(p[idx])
+                idx = int(rng.choice(K, p=p))
+                mm.record_choice(idx, p)
                 mm.update(float(cf[t, idx]))
 
         sw_post = sw.empirical_regret(cf)[-1] if hasattr(sw, "empirical_regret") else None

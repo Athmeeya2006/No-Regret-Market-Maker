@@ -36,8 +36,7 @@ def run_algorithm(mm, rewards: np.ndarray, seed: int) -> np.ndarray:
     for t in range(rewards.shape[0]):
         p = mm.get_distribution()
         idx = int(rng.choice(rewards.shape[1], p=p))
-        mm.last_idx = idx
-        mm.last_p = float(p[idx])
+        mm.record_choice(idx, p)
         mm.update(float(rewards[t, idx]))
     actual = np.cumsum(mm.reward_history)
     best = np.cumsum(rewards, axis=0).max(axis=1)

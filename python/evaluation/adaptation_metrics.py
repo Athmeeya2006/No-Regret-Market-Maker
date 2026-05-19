@@ -12,11 +12,11 @@ class AdaptationEvent:
     change_time:       int
     old_regime:        str
     new_regime:        str
-    delta:             float        # reward gap in new regime
+    delta:             Optional[float]        # reward gap in new regime
     baseline_reward:   float        # pre-change rolling average
     adaptation_time:   Optional[int]  # None if never recovered
     recovery_reward:   Optional[float]
-    theoretical_pred:  float        # O(log K / delta^2)
+    theoretical_pred:  Optional[float]        # O(log K / delta^2)
 
 
 class AdaptationSpeedAnalyzer:
@@ -77,7 +77,9 @@ class AdaptationSpeedAnalyzer:
             )
 
             # Theoretical prediction
-            theoretical = np.log(self.K) / (delta ** 2 + 1e-8)
+            theoretical = None
+            if delta is not None:
+                theoretical = np.log(self.K) / (delta ** 2 + 1e-8)
 
             # Find recovery time
             adaptation_time  = None
@@ -118,23 +120,23 @@ class AdaptationSpeedAnalyzer:
         counterfactual_matrix: Optional[np.ndarray],
         t_change:              int,
         T:                     int,
-    ) -> float:
+    ) -> Optional[float]:
         """
         Estimate delta = gap between best and second-best arm in the new regime.
         Uses counterfactual rewards in the window after regime change.
         """
         if counterfactual_matrix is None:
-            return 0.1  # default
+            return None
 
         window_end = min(t_change + self.window, T)
         if window_end <= t_change:
-            return 0.1
+            return None
 
         cf_window = counterfactual_matrix[t_change:window_end, :]  # (W, K)
         arm_means = cf_window.mean(axis=0)                          # (K,)
         sorted_means = np.sort(arm_means)[::-1]
         if len(sorted_means) < 2:
-            return 0.1
+            return None
         delta = float(sorted_means[0] - sorted_means[1])
         return max(delta, 0.005)
 

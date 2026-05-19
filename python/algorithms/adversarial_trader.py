@@ -152,7 +152,6 @@ class StochasticInformedTrader:
 
         for _ in range(n):
             if V > ask:
-                # Edge from buying below true value
                 edge = V - ask
                 size = max(1, int(edge / mid * self.size_scale * 100))
                 size = min(size, self.size_scale * 5)
@@ -234,7 +233,6 @@ class AdversarialInformedTrader:
     ) -> List[Dict]:
         """Generate adversarial orders for this timestep."""
         if current_mm_weights is None:
-            # No information: behave like stochastic informed
             current_mm_weights = np.ones(self.K) / self.K
 
         phase  = self.compute_best_response(current_mm_weights, mid, spread)
@@ -242,7 +240,6 @@ class AdversarialInformedTrader:
         orders = []
 
         if phase == "exploit":
-            # Trade large in direction of fundamental value
             n = self.rng.poisson(max(1, 3.0 * dt))  # higher arrival rate
             for _ in range(n):
                 ask = mid + spread / 2

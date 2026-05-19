@@ -20,6 +20,11 @@ reward sequence with expected regret
 \]
 \end{theorem}
 
+\noindent\textbf{Note.} The $\Omega(\sqrt{TK})$ lower bound does not include the
+$\sqrt{\log K}$ factor that appears in Exp3's upper bound. A tighter
+construction for the oblivious adversary model yields
+$\Omega(\sqrt{TK\log K})$ (see Auer et al., 2002, Theorem 3.3).
+
 \section{Proof Sketch}
 It is enough to consider stochastic reward sequences chosen before play. Pick
 one arm $a$ uniformly from $[K]$. Arm $a$ has Bernoulli mean $1/2+\epsilon$ and

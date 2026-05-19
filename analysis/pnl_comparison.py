@@ -50,8 +50,7 @@ def run_exp3(rewards: np.ndarray) -> np.ndarray:
         p = mm.get_distribution()
         idx = int(rng.choice(len(SPREADS), p=p))
         reward = float(rewards[t, idx])
-        mm.last_idx = idx
-        mm.last_p = float(p[idx])
+        mm.record_choice(idx, p)
         mm.update(reward)
         pnl.append(reward)
     return np.cumsum(pnl)

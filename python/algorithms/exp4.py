@@ -272,6 +272,17 @@ class EXP4MarketMaker:
 # Factory for building the default expert pool from config
 # ================================================================
 
+def default_expert_pool() -> List[Expert]:
+    """Return the default EXP4 expert pool."""
+    return [
+        FixedSpreadExpert(0.01),
+        FixedSpreadExpert(0.05),
+        VolatilityExpert(),
+        InventoryExpert(),
+        OFIExpert(),
+        ASHeuristicExpert(),
+    ]
+
 def build_expert_pool(cfg: dict) -> List[Expert]:
     """Build the expert pool described in config.yaml."""
     experts: List[Expert] = []
@@ -298,13 +309,5 @@ def build_expert_pool(cfg: dict) -> List[Expert]:
         else:
             logger.warning(f"Unknown expert type: {etype}")
     if not experts:
-        # Sensible defaults if nothing specified
-        experts = [
-            FixedSpreadExpert(0.01),
-            FixedSpreadExpert(0.05),
-            VolatilityExpert(),
-            InventoryExpert(),
-            OFIExpert(),
-            ASHeuristicExpert(),
-        ]
+        experts = default_expert_pool()
     return experts

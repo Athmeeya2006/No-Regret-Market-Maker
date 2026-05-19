@@ -100,8 +100,6 @@ class AvellanedaStoikovMM:
         ask = r + s / 2.0
         return bid, ask
 
-    # ---- Interface matching Exp3 (for benchmarker) --------------
-
     def choose_spread(self, context: dict) -> float:
         """
         Derive the spread from context dict.
@@ -113,8 +111,7 @@ class AvellanedaStoikovMM:
         inventory     = context.get("inventory", 0)
         time_remaining = context.get("time_remaining", 0.5)
 
-        _, ask = self.quote(mid, inventory, time_remaining)
-        bid, _ = self.quote(mid, inventory, time_remaining)
+        bid, ask = self.quote(mid, inventory, time_remaining)
         spread = ask - bid
 
         self.quote_history.append({
@@ -145,8 +142,6 @@ class AvellanedaStoikovMM:
             "over spread arms. Use choose_spread() directly."
         )
 
-    # ---- Parameter calibration helpers -------------------------
-
     @staticmethod
     def estimate_sigma(mid_prices: np.ndarray, dt: float = 1.0) -> float:
         """
@@ -172,8 +167,6 @@ class AvellanedaStoikovMM:
         slope, _ = np.linalg.lstsq(A, log_counts, rcond=None)[0]
         return max(0.1, -slope)
 
-    # ---- Arrival rate model ------------------------------------
-
     def arrival_rate(self, half_spread: float) -> float:
         """lambda(delta) = lambda_0 * exp(-kappa * delta)"""
         return self.lambda_ * np.exp(-self.kappa * half_spread)
@@ -182,8 +175,6 @@ class AvellanedaStoikovMM:
                                 dt: float = 1.0) -> float:
         """Expected number of trades against one side per unit time."""
         return self.arrival_rate(half_spread) * dt
-
-    # ---- Diagnostics -------------------------------------------
 
     def optimal_inventory_distribution(
         self,

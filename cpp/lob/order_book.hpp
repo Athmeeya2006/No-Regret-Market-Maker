@@ -54,9 +54,6 @@ public:
     std::size_t n_bids() const { return order_index_bids_; }
     std::size_t n_asks() const { return order_index_asks_; }
 
-    // Give MatchingEngine access to next_id counter
-    uint64_t allocate_id() { return next_id_++; }
-
 private:
     // Price-level maps
     std::map<double, std::deque<Order>, std::greater<double>> bids_;

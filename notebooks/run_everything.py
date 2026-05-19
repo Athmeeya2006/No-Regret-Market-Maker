@@ -25,7 +25,6 @@ def report(label: str, fn) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Run project validation")
-    parser.add_argument("--config", default="config.yaml", help="Config file path")
     parser.add_argument("--n-rounds", type=int, default=400, help="Simulation rounds")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--skip-build", action="store_true", help="Skip C++ build")

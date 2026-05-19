@@ -18,14 +18,7 @@ logger = logging.getLogger(__name__)
 # ================================================================
 
 class Exp3MarketMaker:
-    """
-    Standard Exp3 market maker.
-
-    At each round:
-      1. call choose_spread(context) -> float spread
-      2. run the round, compute reward
-      3. call update(reward, counterfactual_rewards)
-    """
+    """Adversarial bandit market maker with importance-weighted updates (Auer et al., 2002)."""
 
     def __init__(
         self,
@@ -75,6 +68,16 @@ class Exp3MarketMaker:
         self.last_p   = float(p[idx])
         self.dist_history.append(p.copy())
         return float(self.spreads[idx])
+
+    def record_choice(self, idx: int, p: np.ndarray) -> None:
+        """Record a manually-chosen arm and its probability.
+        
+        Use this when sampling from the distribution externally
+        (e.g., in analysis code). Ensures dist_history is updated.
+        """
+        self.last_idx = int(idx)
+        self.last_p   = float(p[idx])
+        self.dist_history.append(p.copy())
 
     def update(self, reward: float,
                counterfactual_rewards: Optional[Dict[float, float]] = None):
@@ -177,21 +180,25 @@ class Exp3DoublingTrick:
         return self._current.get_distribution()
 
     def choose_spread(self, context=None) -> float:
+        self._epoch_t += 1
         self._maybe_restart()
         s = self._current.choose_spread(context)
         self.dist_history.append(self._current.dist_history[-1].copy())
         return s
 
+    def record_choice(self, idx: int, p: np.ndarray) -> None:
+        self._epoch_t += 1
+        self._current.record_choice(idx, p)
+        self.dist_history.append(self._current.dist_history[-1].copy())
+        if self._epoch_t >= self._epoch_len:
+            self._maybe_restart()
+
     def update(self, reward: float, counterfactual_rewards=None):
         self._current.update(reward, counterfactual_rewards)
-        self._epoch_t  += 1
         self._global_t += 1
         self.reward_history.append(reward)
         if self._current.spread_history:
             self.spread_history.append(self._current.spread_history[-1])
-        elif self.last_idx is not None:
-            self.spread_history.append(self.last_idx)
-        self._maybe_restart()
 
     def theoretical_regret_bound(self, T=None) -> float:
         T = T or self._global_t
@@ -219,7 +226,7 @@ class Exp3DoublingTrick:
 # ================================================================
 
 class SWExp3MarketMaker:
-    """Sliding-window Exp3 for non-stationary reward sequences."""
+    """Sliding-window variant of Exp3 for non-stationary reward sequences."""
 
     def __init__(
         self,
@@ -282,6 +289,11 @@ class SWExp3MarketMaker:
         self.last_p   = float(p[idx])
         self.dist_history.append(p.copy())
         return float(self.spreads[idx])
+
+    def record_choice(self, idx: int, p: np.ndarray) -> None:
+        self.last_idx = int(idx)
+        self.last_p   = float(p[idx])
+        self.dist_history.append(p.copy())
 
     def update(self, reward: float, counterfactual_rewards=None):
         if self.last_idx is None:

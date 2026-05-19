@@ -85,6 +85,7 @@ class MarketSimulator:
         self.t:           int   = 0
         engine_mid = engine.mid_price() if _HAS_CPP else 100.0
         self._mid:        float = engine_mid if np.isfinite(engine_mid) and engine_mid > 0 else 100.0
+        self._spread_revenue_this_round: float = 0.0
 
         # Records
         self.results:     List[RoundResult] = []
@@ -115,7 +116,6 @@ class MarketSimulator:
         return self.results
 
     def _run_one_round(self, dt: float) -> RoundResult:
-        # 1. Update regime parameters if applicable
         regime_name = "default"
         if self.regime_gen is not None:
             params = self.regime_gen.get_params(self.t)
@@ -123,84 +123,25 @@ class MarketSimulator:
             self._apply_regime(params)
 
         mid_before = self._mid
-
-        # 2. Build context for the MM
         context = self._build_context(dt)
 
-        # 3. MM chooses spread; record its distribution if available
-        mm_distribution = None
-        if hasattr(self.mm, "get_distribution"):
-            try:
-                mm_distribution = self.mm.get_distribution().copy()
-            except NotImplementedError:
-                pass
+        spread, mm_distribution = self._choose_and_quote_mm(context)
+        n_noise_trades, noise_orders = self._process_noise_traders(dt)
+        n_informed_trades, informed_orders, was_adversarial = \
+            self._process_informed_traders(dt, spread, mm_distribution)
 
-        spread = self.mm.choose_spread(context)
-        spread = max(self.tick_size, round(spread / self.tick_size) * self.tick_size)
-
-        bid_price = self._mid - spread / 2
-        ask_price = self._mid + spread / 2
-
-        # 4. Submit MM quotes to LOB
-        self._cancel_stale_mm_quotes()
-        bid_id = self._submit_mm_quote("BID", bid_price)
-        ask_id = self._submit_mm_quote("ASK", ask_price)
-        self._bid_id = bid_id
-        self._ask_id = ask_id
-
-        # 5. Noise traders arrive
-        n_noise_trades = 0
-        noise_orders = self.noise_trader.maybe_arrive(dt)
-        for order_dict in noise_orders:
-            fills = self._submit_order(order_dict)
-            n_noise_trades += len(fills)
-            self._process_fills(fills, order_dict)
-
-        # 6. Informed / adversarial traders arrive
-        n_informed_trades = 0
-        was_adversarial   = False
-        mm_weights = mm_distribution if mm_distribution is not None \
-                     else np.ones(len(self.spread_choices)) / len(self.spread_choices)
-
-        if hasattr(self.informed_trader, "observe_mm_strategy"):
-            self.informed_trader.observe_mm_strategy(mm_weights)
-            informed_orders = self.informed_trader.maybe_arrive(
-                dt, self._mid, spread, current_mm_weights=mm_weights
-            )
-            was_adversarial = True
-        else:
-            informed_orders = self.informed_trader.maybe_arrive(
-                dt, self._mid, spread
-            )
-
-        for order_dict in informed_orders:
-            fills = self._submit_order(order_dict)
-            n_informed_trades += len(fills)
-            self._process_fills(fills, order_dict)
-
-        # 7. Advance true value and mid price (GBM + mean reversion to V)
         self._advance_mid(dt)
-
         mid_after = self._mid
-
-        # 8. Cancel remaining MM quotes (fresh quotes each round)
         self._cancel_stale_mm_quotes()
 
-        # 9. Compute reward components
-        spread_revenue    = self._spread_revenue_this_round
-        inventory_pnl     = self.inventory * (mid_after - mid_before)
-        inventory_penalty = self.inventory_penalty * self.inventory ** 2
-        reward            = spread_revenue + inventory_pnl - inventory_penalty
+        spread_revenue, inventory_pnl, inventory_penalty, reward = \
+            self._compute_reward(mid_before, mid_after)
 
-        # 10. Compute counterfactual rewards (replay each spread)
         counterfactual_rewards = self._compute_counterfactuals(
             mid_before, mid_after, noise_orders, informed_orders, dt
         )
 
-        # 11. Update MM
         self.mm.update(reward, counterfactual_rewards)
-
-        # 12. Reset per-round accumulators
         self._spread_revenue_this_round = 0.0
 
         return RoundResult(
@@ -220,6 +161,73 @@ class MarketSimulator:
             counterfactual_rewards=counterfactual_rewards,
             mm_distribution=mm_distribution,
         )
+
+    def _choose_and_quote_mm(self, context: dict) -> tuple:
+        """MM chooses spread and submits quotes to LOB."""
+        mm_distribution = None
+        if hasattr(self.mm, "get_distribution"):
+            try:
+                mm_distribution = self.mm.get_distribution().copy()
+            except NotImplementedError:
+                pass
+
+        spread = self.mm.choose_spread(context)
+        spread = max(self.tick_size, round(spread / self.tick_size) * self.tick_size)
+
+        bid_price = self._mid - spread / 2
+        ask_price = self._mid + spread / 2
+
+        self._cancel_stale_mm_quotes()
+        bid_id = self._submit_mm_quote("BID", bid_price)
+        ask_id = self._submit_mm_quote("ASK", ask_price)
+        self._bid_id = bid_id
+        self._ask_id = ask_id
+
+        return spread, mm_distribution
+
+    def _process_noise_traders(self, dt: float) -> tuple:
+        """Noise traders arrive and submit orders."""
+        n_trades = 0
+        orders = self.noise_trader.maybe_arrive(dt)
+        for order_dict in orders:
+            fills = self._submit_order(order_dict)
+            n_trades += len(fills)
+            self._process_fills(fills, order_dict)
+        return n_trades, orders
+
+    def _process_informed_traders(self, dt: float, spread: float, mm_distribution: Optional[np.ndarray]) -> tuple:
+        """Informed/adversarial traders arrive and submit orders."""
+        n_trades = 0
+        was_adversarial = False
+
+        mm_weights = mm_distribution if mm_distribution is not None \
+                     else np.ones(len(self.spread_choices)) / len(self.spread_choices)
+
+        if hasattr(self.informed_trader, "observe_mm_strategy"):
+            self.informed_trader.observe_mm_strategy(mm_weights)
+            orders = self.informed_trader.maybe_arrive(
+                dt, self._mid, spread, current_mm_weights=mm_weights
+            )
+            was_adversarial = True
+        else:
+            orders = self.informed_trader.maybe_arrive(
+                dt, self._mid, spread
+            )
+
+        for order_dict in orders:
+            fills = self._submit_order(order_dict)
+            n_trades += len(fills)
+            self._process_fills(fills, order_dict)
+
+        return n_trades, orders, was_adversarial
+
+    def _compute_reward(self, mid_before: float, mid_after: float) -> tuple:
+        """Compute PnL and reward for this round."""
+        spread_revenue = self._spread_revenue_this_round
+        inventory_pnl = self.inventory * (mid_after - mid_before)
+        inventory_penalty = self.inventory_penalty * self.inventory ** 2
+        reward = spread_revenue + inventory_pnl - inventory_penalty
+        return spread_revenue, inventory_pnl, inventory_penalty, reward
 
     # ================================================================
     # Context builder
@@ -254,8 +262,6 @@ class MarketSimulator:
     # LOB interaction helpers
     # ================================================================
 
-    _spread_revenue_this_round: float = 0.0
-
     def _submit_mm_quote(self, side: str, price: float) -> Optional[int]:
         price = max(0.01, price)
         if not _HAS_CPP:
@@ -271,11 +277,11 @@ class MarketSimulator:
                 if side == "BID":
                     self.inventory       += qty
                     self.cash            -= f.price * qty
-                    self._spread_revenue_this_round += spread_earned_from_fill(f, "BID")
+                    self._spread_revenue_this_round += (self._mid - f.price) * qty
                 else:
                     self.inventory       -= qty
                     self.cash            += f.price * qty
-                    self._spread_revenue_this_round += spread_earned_from_fill(f, "ASK")
+                    self._spread_revenue_this_round += (f.price - self._mid) * qty
         return int(self.engine.last_order_id())
 
     def _cancel_stale_mm_quotes(self):
@@ -327,28 +333,24 @@ class MarketSimulator:
         dt: float,
     ) -> Dict[float, float]:
         """
-        For each hypothetical spread s in spread_choices, compute what
-        reward the MM would have earned if it had quoted that spread.
+        Compute counterfactual rewards for each spread arm.
 
-        Simplified model (avoids re-running LOB for each arm):
-          spread_revenue(s) = n_fills(s) * s / 2
-          n_fills(s): Poisson with rate proportional to exp(-kappa*s/2)
-            normalised to expected actual fills at chosen spread.
+        Uses an exponential approximation of fill rates rather than exact replay:
+            fill_rate(s) ~ exp(-kappa * s)
+        where kappa models order sensitivity to spread width.
 
-        inventory_pnl and inventory_penalty are computed identically
-        because those depend on inventory accumulated, which depends
-        on fill counts.
+        Note: This is an approximation, not an exact counterfactual replay.
+        Regret curves depend on the accuracy of this model.
         """
         all_orders = noise_orders + informed_orders
         total_qty  = sum(o.get("qty", 1) for o in all_orders)
         mid_move   = mid_after - mid_before
 
         counterfactuals: Dict[float, float] = {}
+        kappa = 1.5  # Order sensitivity to spread (matches A-S default)
+        
         for s in self.spread_choices:
-            # Expected fill rate: higher for tighter spreads
-            # Use exponential model: fill_rate(s) ~ exp(-kappa * s)
-            # kappa = 1.5 (default); normalise to total_qty at s=0
-            kappa = 1.5
+            # Expected fill fraction using exponential arrival model
             fill_frac     = np.exp(-kappa * s)
             fill_frac_ref = np.exp(-kappa * min(self.spread_choices))
             expected_fills = max(0, total_qty * fill_frac / (fill_frac_ref + 1e-8))
@@ -358,8 +360,6 @@ class MarketSimulator:
             spread_rev = expected_fills * s / 2.0
 
             # Inventory pnl: assume same direction of trades
-            # If all noise (random dir) => inventory ~ 0 net
-            # Expected inventory pnl is near zero for noise traders
             inv_pnl = self.inventory * mid_move * (expected_fills / (total_qty + 1e-8))
 
             # Inventory penalty: same penalty (conservative)
@@ -380,10 +380,17 @@ class MarketSimulator:
         self._mid  = max(0.01, self._mid)
 
     def _apply_regime(self, params: dict):
-        """Apply regime parameters to traders."""
+        """Apply regime parameters to traders and dynamics."""
         if hasattr(self.noise_trader, "rate"):
             self.noise_trader.rate = params.get("lambda", self.noise_trader.rate)
-        self.mid_price_vol = params.get("sigma", self.mid_price_vol)
+        
+        sigma = params.get("sigma", self.mid_price_vol)
+        self.mid_price_vol = sigma
+        
+        # Update informed trader's signal volatility to match regime
+        if hasattr(self.informed_trader, "V_proc") and hasattr(self.informed_trader.V_proc, "vol"):
+            self.informed_trader.V_proc.vol = sigma
+        
         if hasattr(self.informed_trader, "rate"):
             base  = params.get("lambda", 5.0)
             mu    = params.get("mu", 0.2)
@@ -411,8 +418,3 @@ class MarketSimulator:
             for k, s in enumerate(self.spread_choices):
                 mat[t, k] = r.counterfactual_rewards.get(s, 0.0)
         return mat
-
-
-def spread_earned_from_fill(fill, mm_side: str) -> float:
-    """Compute spread revenue for the MM from a single fill."""
-    return 0.0

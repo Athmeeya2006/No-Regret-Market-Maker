@@ -8,6 +8,9 @@ import numpy as np
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from copy import deepcopy
+from pathlib import Path
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +52,19 @@ class Benchmarker:
         n_rounds:       int   = 10000,
         dt:             float = 1.0,
         seed:           int   = 42,
+        config:         Optional[dict] = None,
+        config_path:    Optional[str] = None,
     ):
         self.sim_factory   = sim_factory
         self.spread_choices = spread_choices
         self.n_rounds      = n_rounds
         self.dt            = dt
         self.seed          = seed
+        self.config        = config
+        if config_path is None:
+            root = Path(__file__).resolve().parents[2]
+            config_path = str(root / "config.yaml")
+        self.config_path   = config_path
 
     def run_all(self) -> Dict[str, BenchmarkResult]:
         """Build and run all algorithms. Returns results dict."""
@@ -131,13 +141,15 @@ class Benchmarker:
         K  = len(self.spread_choices)
         T  = self.n_rounds
 
+        cfg = self._load_config()
+
         algos = {
             "Exp3":              Exp3MarketMaker(self.spread_choices, T=T),
             "Exp3-DoublingTrick": Exp3DoublingTrick(self.spread_choices),
             "SW-Exp3(W=200)":    SWExp3MarketMaker(self.spread_choices, window=200),
             "SW-Exp3(W=500)":    SWExp3MarketMaker(self.spread_choices, window=500),
             "EXP4":              EXP4MarketMaker(
-                                     build_expert_pool({}), gamma=0.1, T=T
+                                     build_expert_pool(cfg), gamma=0.1, T=T
                                  ),
             "AvellanedaStoikov":  AvellanedaStoikovMM(
                                      sigma=0.01, kappa=1.5, gamma=0.1
@@ -149,6 +161,20 @@ class Benchmarker:
             algos[f"Fixed({s:.3f})"] = FixedSpreadMM(s)
 
         return algos
+
+    def _load_config(self) -> dict:
+        if self.config is not None:
+            return self.config
+        path = Path(self.config_path) if self.config_path else None
+        if path is None or not path.is_file():
+            return {}
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                cfg = yaml.safe_load(handle) or {}
+        except Exception as exc:
+            logger.warning("Failed to load config from %s: %s", path, exc)
+            return {}
+        return cfg if isinstance(cfg, dict) else {}
 
     # ================================================================
     # Metrics helpers

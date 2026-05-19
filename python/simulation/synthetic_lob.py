@@ -67,7 +67,11 @@ class GARCHTrueValueProcess:
 
     def reset(self):
         self.V = self.V0
-        self.state = GARCHState(variance=self.state.variance, last_return=0.0)
+        if self.alpha + self.beta < 1.0:
+            long_run = self.omega / max(1.0 - self.alpha - self.beta, 1e-8)
+        else:
+            long_run = max(self.omega, 1e-8)
+        self.state = GARCHState(variance=float(long_run), last_return=0.0)
         self.history = [self.V]
 
 

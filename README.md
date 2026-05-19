@@ -6,7 +6,7 @@ This repository is a full-stack sandbox for studying no-regret learning in marke
 
 Classical market making assumes calibrated order arrival models and stationary volatility. In practice, flow changes and parameters drift. Exp3 and its variants guarantee sublinear regret even when rewards are adversarial, which makes them a natural fit for spread selection when the environment is not trusted. This project uses a controlled simulator to stress-test that idea.
 
-## What you get
+## Components
 
 - A C++17 matching engine with price-time priority, cancellations, depth, OFI, and volatility statistics.
 - A Python-facing `lob_engine` module via pybind11.
@@ -88,6 +88,19 @@ python -m pytest tests -q
 8. Update the market maker with the realized reward.
 
 The context includes mid-price, spread, OFI, inventory, realized volatility, depth imbalance, momentum, and time remaining. It is designed to be compatible with EXP4 experts and model-based baselines.
+
+### Counterfactual rewards (approximation)
+
+Regret curves depend on the accuracy of the counterfactual reward matrix. This simulator uses an **exponential approximation** rather than exact replay:
+
+$$\text{fill\_rate}(s) \propto \exp(-\kappa s)$$
+
+where $\kappa = 1.5$ models order arrival sensitivity to spread width. This approximation is:
+- **Directionally correct**: tighter spreads receive more fills
+- **Biased**: does not reflect the true fill distribution from the order flow
+- **Necessary**: exact replay would require re-running the LOB for each arm
+
+When interpreting regret curves, note that they measure performance relative to an approximated counterfactual, not an oracle with access to the true outcome of alternate spreads. This is a limitation of the simulator design, not the learning algorithms.
 
 ## Synthetic data for controlled experiments
 
